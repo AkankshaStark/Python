@@ -5,6 +5,7 @@ from pandas.errors import EmptyDataError
 totalfilesnum = input("Enter the number of files you want to read.\n")
 filepaths = [input(f"Enter path for file {i + 1}: ") for i in range(int(totalfilesnum))]
 
+# Read files and add them to a dictionary incase no exception is encountered.
 df = {}
 for filepath in filepaths:
     try:
