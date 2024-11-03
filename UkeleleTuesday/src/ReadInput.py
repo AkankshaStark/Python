@@ -2,6 +2,7 @@ import pandas as pd
 from pandas import read_csv
 from pandas.errors import EmptyDataError
 
+#Take user input for number of files & the files' path name.
 totalfilesnum = input("Enter the number of files you want to read.\n")
 filepaths = [input(f"Enter path for file {i + 1}: ") for i in range(int(totalfilesnum))]
 
@@ -21,3 +22,5 @@ for filepath in filepaths:
         print(f"Data not found in file {filepath}")
     except Exception as e:
         print(f"Some exception occurred in file {filepath}")
+
+
