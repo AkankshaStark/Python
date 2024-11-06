@@ -1,0 +1,74 @@
+import pandas as pd
+
+def load_csv():
+    """Load CSV file into a DataFrame from the predefined path."""
+    file_path = "C:/Users/makin/Downloads/python notes/tabdb.csv"
+    try:
+        df = pd.read_csv(file_path)
+        return df
+    except Exception as e:
+        print(f"Error loading CSV file: {e}")
+        return None
+
+def display_menu(columns):
+    """Display column names as filter options."""
+    print("\nAvailable columns:")
+    for i, col in enumerate(columns, 1):
+        print(f"{i}. {col}")
+    print(f"{len(columns) + 1}. Exit")
+
+def select_filter(columns):
+    """Allow user to select a column as a filter."""
+    while True:
+        try:
+            choice = int(input("\nSelect a column number to filter (or choose Exit): "))
+            if 1 <= choice <= len(columns):
+                return columns[choice - 1]
+            elif choice == len(columns) + 1:
+                return None  # Exit
+            else:
+                print("Invalid choice. Please choose again.")
+        except ValueError:
+            print("Please enter a valid number.")
+
+def search_column(df, column):
+    """Display values in the selected column and allow searching."""
+    print(f"\nValues in '{column}' column:\n")
+    print(df[column].to_string(index=False))
+
+    search_value = input(f"\nEnter a value to search in '{column}' (or leave blank to skip): ").strip()
+    if search_value:
+        results = df[df[column] == search_value]
+        return results
+    return None
+
+def main():
+    df = load_csv()
+
+    if df is None:
+        return  # Exit if file loading failed
+
+    columns = list(df.columns)
+    selected_columns = []
+
+    while True:
+        display_menu(columns)
+        column = select_filter(columns)
+        
+        if column is None:
+            print("Exiting the filter selection.")
+            break
+
+        if column not in selected_columns:
+            selected_columns.append(column)
+
+        # Display values in the chosen column and allow searching
+        results = search_column(df, column)
+
+        # If search results found, display in the selected columns
+        if results is not None:
+            print("\nSearch results in the selected columns:\n")
+            print(results[selected_columns].to_string(index=False))
+
+if __name__ == "__main__":
+    main()
