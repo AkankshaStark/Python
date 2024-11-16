@@ -1,49 +1,71 @@
+# ReadInput.py
+
 import pandas as pd
 from pandas import read_csv
 from pandas.errors import EmptyDataError
+from typing import List
 
-# Take user input for number of files & the files' path name.
-totalfilesnum = input("Enter the number of files you want to read.\n")
-filepaths = [input(f"Enter path for file {i + 1}: ") for i in range(int(totalfilesnum))]
 
 # Function to clean the data according to specified points
-def clean_data(df):
-    #Leave 'language' column as-is to signify no lyrics for missing values
-    if 'language' in df.columns:
-            missing_language_count = df['language'].isna().sum()
-            if missing_language_count > 0:
-                print(
-                    f"Note: {missing_language_count} entries in 'language' are missing, indicating songs with no lyrics.")
+def standardize_columns(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+    """
+    Standardizes specified string columns by converting to lowercase and stripping whitespace.
 
-    #Standardize 'language', 'source', 'type', and 'gender' to lowercase if they exist
-    for col in ['language', 'source', 'type', 'gender']:
+    Parameters:
+        df (pd.DataFrame): The DataFrame to clean.
+        columns (List[str]): List of columns to standardize.
+
+    Returns:
+        pd.DataFrame: The cleaned DataFrame.
+    """
+    for col in columns:
         if col in df.columns:
-            df[col] = df[col].str.lower()
-
-    #Set missing difficulty levels to -1
-    if 'difficulty' in df.columns:
-        df.fillna({'difficulty': "-1"}, inplace=True)
-
-    # Return the cleaned DataFrame
+            df[col] = df[col].str.lower().str.strip()
     return df
 
-# Read files and add them to a dictionary after cleaning if no exception is encountered.
-data_frames = {}
-for filepath in filepaths:
-    try:
-        df = read_csv(filepath)
-        print(f"Successfully read file {filepath}")
-        # Clean the data
-        df = clean_data(df)
-        # Store the cleaned DataFrame in the dictionary
-        data_frames[filepath] = df
-    except FileNotFoundError:
-        print(f"File '{filepath}' is not found. Please check the specified path for the file.")
-    except pd.errors.ParserError:
-        print(f"Error parsing data in file {filepath}")
-    except UnicodeDecodeError:
-        print(f"Invalid encoding of the file {filepath}")
-    except EmptyDataError:
-        print(f"Data not found in file {filepath}")
-    except Exception as e:
-        print(f"Some exception occurred in file {filepath}: {e}")
+
+def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Handles missing values in specific columns.
+    """
+    if 'language' in df.columns:
+        missing_language_count = df['language'].isna().sum()
+        if missing_language_count > 0:
+            print(f"Note: {missing_language_count} entries in 'language' are missing, indicating songs with no lyrics.")
+    if 'difficulty' in df.columns:
+        df['difficulty'] = df['difficulty'].astype(str).fillna("-1")
+    return df
+
+
+# Read and clean each file
+def read_and_clean_files(filepaths: List[str]) -> dict:
+    """
+    Reads, cleans, and returns a dictionary of DataFrames for each file path.
+
+    Parameters:
+        filepaths (List[str]): List of file paths to read.
+
+    Returns:
+        dict: A dictionary of cleaned DataFrames keyed by file path.
+    """
+    data_frames = {}
+    for filepath in filepaths:
+        try:
+            df = read_csv(filepath)
+            print(f"Successfully read file {filepath}")
+            # Apply standardization and missing value handling
+            df = standardize_columns(df, ['language', 'source', 'type', 'gender'])
+            df = handle_missing_values(df)
+            data_frames[filepath] = df
+        except FileNotFoundError:
+            print(f"File '{filepath}' is not found. Please check the specified path for the file.")
+        except pd.errors.ParserError:
+            print(f"Error parsing data in file {filepath}")
+        except UnicodeDecodeError:
+            print(f"Invalid encoding of the file {filepath}")
+        except EmptyDataError:
+            print(f"Data not found in file {filepath}")
+        except Exception as e:
+            print(f"Some exception occurred in file {filepath}: {e}")
+
+    return data_frames
