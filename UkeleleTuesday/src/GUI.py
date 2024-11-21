@@ -1,15 +1,21 @@
+from tkinter import messagebox, simpledialog, filedialog
+
+import matplotlib
+import seaborn as sns
 import pandas as pd
 from tkinter import *
 from typing import Dict, Any
-from Multifilter import get_user_filters  # Assuming you already have the Multifilter module
 
-# Load the dataset
-file_path = "/Users/aruba/Documents/PythonAssignment/UkeleleTuesday/dataSet/tabdb.csv"  # Update with your file path
-tab_df = pd.read_csv(file_path)
+# This sets TkAgg as the backend
+import matplotlib.pyplot as plt
+#matplotlib.use('TkAgg')  # Set the backend to TkAgg
 
-# Load the play dataset
-play_file_path = "/Users/aruba/Documents/PythonAssignment/UkeleleTuesday/dataSet/playdb.csv"  # Update with your play data path
-play_df = pd.read_csv(play_file_path)
+
+from Multifilter import get_user_filters
+
+import pandas as pd
+
+from UkeleleTuesday.src.updatedRebecaCode import apply_filter
 
 # Dictionary to hold selected filter values for each column
 selected_filters = {}
@@ -203,11 +209,229 @@ def display_results(filtered_df):
         result_text.insert(END, filtered_df.to_string(index=False))
         result_text.config(state=DISABLED)  # Disable editing
 
+        # Add the Show Graph button here
+        show_graph_button = Button(
+            results_frame,
+            text="Show Graph",
+            command=lambda: show_graph(filtered_df),
+            bg="purple",
+            fg="black"
+        )
+        show_graph_button.pack(pady=10)
+
     # Add a back button to return to the filter UI
     back_button = Button(display_frame, text="Back to Filters", command=lambda: back_to_filters(display_frame), bg="green")
     back_button.pack(pady=10)
 
+    def show_graph(filtered_df):
+        if filtered_df.empty or filtered_df.columns.empty:
+            messagebox.showinfo("No Data", "No data available to plot.")
+            return
 
+        try:
+            # Clear previous widgets in the display frame
+            for widget in display_frame.winfo_children():
+                widget.destroy()
+
+            # Create variables for selections
+            x_var = StringVar()
+            y_var = StringVar(value='')  # Default to empty string
+            chart_type_var = StringVar()
+
+            # Chart Type Selection
+            Label(
+                display_frame,
+                text="Select Chart Type:",
+                font=("Arial", 12)
+            ).pack(pady=5)
+            chart_type_options = ['Histogram', 'Cumulative Line Chart', 'Pie Chart', 'Scatter Plot', 'Bar Plot', 'Box Plot']
+            chart_type_dropdown = OptionMenu(display_frame, chart_type_var, *chart_type_options)
+            chart_type_dropdown.pack(pady=5)
+
+            # X-axis Selection
+            Label(
+                display_frame,
+                text="Select X-axis Column:",
+                font=("Arial", 12)
+            ).pack(pady=5)
+            x_dropdown = OptionMenu(display_frame, x_var, *filtered_df.columns)
+            x_dropdown.pack(pady=5)
+
+            # Y-axis Selection (optional)
+            Label(
+                display_frame,
+                text="Select Y-axis Column (optional):",
+                font=("Arial", 12)
+            ).pack(pady=5)
+            y_options = [''] + list(filtered_df.columns)
+            y_dropdown = OptionMenu(display_frame, y_var, *y_options)
+            y_dropdown.pack(pady=5)
+
+            # Generate Graph Button
+            def generate_graph():
+                x_column = x_var.get()
+                y_column = y_var.get()
+                chart_type = chart_type_var.get()
+                if not x_column or not chart_type:
+                    error_label = Label(
+                        display_frame,
+                        text="Please select a chart type and X-axis column.",
+                        fg="red"
+                    )
+                    error_label.pack(pady=5)
+                    return
+                try:
+                    plot_filtered_data(filtered_df, x_column, y_column, chart_type)
+                except Exception as e:
+                    messagebox.showerror("Error", f"An error occurred while plotting: {e}")
+
+            graph_button = Button(
+                display_frame,
+                text="Generate Graph",
+                command=generate_graph,
+                bg="blue",
+                fg="black"
+            )
+            graph_button.pack(pady=10)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {e}")
+
+def plot_filtered_data(df: pd.DataFrame, x_column: str, y_column: str, chart_type: str) -> None:
+    # Check if the X-axis column exists
+    if x_column not in df.columns:
+        messagebox.showerror("Error", f"Column '{x_column}' not found in filtered data.")
+        return
+
+    # Handle Histogram
+    if chart_type == 'Histogram':
+        if pd.api.types.is_numeric_dtype(df[x_column]):
+            plt.figure(figsize=(10, 6))
+            sns.histplot(df[x_column], bins=10, kde=True)
+            plt.title(f"Histogram of {x_column.capitalize()}")
+            plt.xlabel(x_column.capitalize())
+            plt.ylabel('Frequency')
+            plt.tight_layout()
+            plt.savefig(chart_type + "output_plot.png")
+            return
+        else:
+            messagebox.showinfo("Plotting Error", f"Cannot plot histogram for non-numeric column '{x_column}'.")
+            return
+
+    # Handle Cumulative Line Chart
+    elif chart_type == 'Cumulative Line Chart':
+        if x_column not in df.columns:
+            messagebox.showerror("Error", f"The data does not contain '{x_column}' column.")
+            return
+        if not pd.api.types.is_datetime64_any_dtype(df[x_column]):
+            try:
+                df[x_column] = pd.to_datetime(df[x_column], errors='coerce')
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to convert '{x_column}' to datetime: {e}")
+                return
+        df = df.dropna(subset=[x_column])
+        df = df.sort_values(x_column)
+
+        # Group by date and count number of songs played
+        df_grouped = df.groupby(x_column).size().reset_index(name='song_count')
+        df_grouped['cumulative_count'] = df_grouped['song_count'].cumsum()
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(df_grouped[x_column], df_grouped['cumulative_count'], marker='o')
+        plt.title('Cumulative Number of Songs Played Over Time')
+        plt.xlabel('Date')
+        plt.ylabel('Cumulative Number of Songs')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(chart_type + "output_plot.png")
+        return
+
+    # Handle Pie Chart
+    elif chart_type == 'Pie Chart':
+        if x_column in df.columns:
+            counts = df[x_column].value_counts()
+            plt.figure(figsize=(8, 8))
+            counts.plot(kind='pie', autopct='%1.1f%%', startangle=90)
+            plt.title(f"Distribution of Songs by {x_column.capitalize()}")
+            plt.ylabel('')
+            plt.tight_layout()
+            plt.savefig(chart_type + "output_plot.png")
+            return
+        else:
+            messagebox.showerror("Error", f"Column '{x_column}' not found in data.")
+            return
+
+    # Check if the Y-axis column exists
+    if y_column not in df.columns:
+        messagebox.showerror("Error", f"Column '{y_column}' not found in filtered data.")
+        return
+
+    # Both columns are numeric (Scatter Plot)
+    if chart_type == 'Scatter Plot':
+        if pd.api.types.is_numeric_dtype(df[x_column]) and pd.api.types.is_numeric_dtype(df[y_column]):
+            plt.figure(figsize=(10, 6))
+            sns.scatterplot(x=x_column, y=y_column, data=df)
+            plt.title(f"{y_column.capitalize()} vs {x_column.capitalize()}")
+            plt.xlabel(x_column.capitalize())
+            plt.ylabel(y_column.capitalize())
+            plt.tight_layout()
+            plt.show()
+            plt.savefig(chart_type + "output_plot.png")
+            return
+        else:
+            messagebox.showinfo("Plotting Error", "Both X and Y columns must be numeric for a scatter plot.")
+            return
+
+    # X is categorical, Y is numeric (Bar Plot)
+    elif chart_type == 'Bar Plot':
+        if pd.api.types.is_numeric_dtype(df[y_column]) and (
+            pd.api.types.is_categorical_dtype(df[x_column]) or pd.api.types.is_object_dtype(df[x_column])
+        ):
+            # Ask user for aggregation method
+            aggregation = simpledialog.askstring(
+                "Aggregation", f"Choose aggregation for {y_column} (sum or average):", initialvalue="average"
+            )
+            if aggregation and aggregation.lower() == 'sum':
+                df_grouped = df.groupby(x_column)[y_column].sum().reset_index()
+                agg_label = f"Total {y_column.capitalize()}"
+            else:
+                df_grouped = df.groupby(x_column)[y_column].mean().reset_index()
+                agg_label = f"Average {y_column.capitalize()}"
+
+            plt.figure(figsize=(10, 6))
+            sns.barplot(x=x_column, y=y_column, data=df_grouped, ci=None)
+            plt.title(f"{agg_label} by {x_column.capitalize()}")
+            plt.xlabel(x_column.capitalize())
+            plt.ylabel(agg_label)
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            plt.savefig(chart_type + "output_plot.png")
+            return
+        else:
+            messagebox.showinfo("Plotting Error", "X must be categorical and Y must be numeric for a bar plot.")
+            return
+
+    # X is numeric, Y is categorical (Box Plot)
+    elif chart_type == 'Box Plot':
+        if pd.api.types.is_numeric_dtype(df[x_column]) and (
+            pd.api.types.is_categorical_dtype(df[y_column]) or pd.api.types.is_object_dtype(df[y_column])
+        ):
+            plt.figure(figsize=(10, 6))
+            sns.boxplot(x=y_column, y=x_column, data=df)
+            plt.title(f"Distribution of {x_column.capitalize()} by {y_column.capitalize()}")
+            plt.xlabel(y_column.capitalize())
+            plt.ylabel(x_column.capitalize())
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            plt.savefig(chart_type + "output_plot.png")
+            return
+        else:
+            messagebox.showinfo("Plotting Error", "X must be numeric and Y must be categorical for a box plot.")
+            return
+
+    else:
+        messagebox.showinfo("Plotting Error", "Could not determine appropriate plot for selected data.")
+        return
 
 def back_to_filters(results_frame):
     """
@@ -274,6 +498,9 @@ def display_song_count_results(matching_rows):
     if matching_rows.empty:
         no_results_label = Label(results_frame, text="No matching songs found.", fg="red", font=("Arial", 14))
         no_results_label.pack(pady=10)
+        # Add a back button to return to the filter UI
+        back_button = Button(results_frame, text="Back to Filters", command=lambda: back_to_filters(results_frame))
+        back_button.pack(pady=10)
     else:
         # Create a Text widget to show the song counts
         result_text = Text(results_frame, height=15, width=80)
@@ -286,9 +513,9 @@ def display_song_count_results(matching_rows):
         # Force a refresh of the widget
         result_text.update_idletasks()
 
-    # Add a back button to return to the filter UI
-    back_button = Button(results_frame, text="Back to Filters", command=lambda: back_to_filters(results_frame))
-    back_button.pack(pady=10)
+        # Add a back button to return to the filter UI
+        back_button = Button(results_frame, text="Back to Filters", command=lambda: back_to_filters(results_frame))
+        back_button.pack(pady=10)
 
 # In your existing GUI.py
 
@@ -303,36 +530,99 @@ def clear_all_checkboxes():
         var.set(0)
 
     print("All checkboxes have been cleared.")
+    # Add a back button to return to the filter UI
+    back_button = Button(display_frame, text="Back to Filters", command=lambda: back_to_filters(display_frame),
+                         bg="green")
+    back_button.pack(pady=10)
 
+import pandas as pd
+from tkinter import Tk, Frame, Button, filedialog, messagebox
+
+# Global variables to store the dataframes
+tab_df = None
+play_df = None
+request_df = None
 
 # Create the GUI application
 root = Tk()
-root.title("Column Value Viewer")
 root.geometry("800x600")
+root.title("Ukulele Tuesday")
 
-# Create a frame for buttons
+# Create a frame for fixed buttons (CSV loading buttons)
 button_frame = Frame(root)
 button_frame.pack(side="top", fill="x", pady=10)
+
+# Create a separate frame for dynamic buttons (column buttons)
+dynamic_button_frame = Frame(root)
+dynamic_button_frame.pack(side="top", fill="x", pady=10)
 
 # Create a frame for displaying values
 display_frame = Frame(root)
 display_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
-# Dynamically create buttons for each column, excluding the "tabber" column
-for column_name in tab_df.columns:
-    if column_name != "tabber":  # Skip the "tabber" column
-        btn = Button(button_frame, text=column_name, command=lambda col=column_name: display_column_values(col), width=15)
-        btn.pack(side="left", padx=5, pady=5)
+# Function to dynamically create column buttons
+def create_column_buttons():
+    for widget in dynamic_button_frame.winfo_children():
+        widget.destroy()  # Clear existing dynamic buttons
+
+    # Add buttons for each column in tab_df
+    if tab_df is not None:
+        for column_name in tab_df.columns:
+            if column_name != "tabber":  # Skip the "tabber" column
+                btn = Button(dynamic_button_frame, text=column_name, command=lambda col=column_name: display_column_values(col), width=15)
+                btn.pack(side="left", padx=5, pady=5)
+
+# Functions to load CSV files
+def load_tab_db():
+    global tab_df
+    file_path = filedialog.askopenfilename(title="Select TAB_DB File")
+    if file_path:
+        try:
+            tab_df = pd.read_csv(file_path)
+            messagebox.showinfo("Success", "TAB_DB loaded successfully!")
+            create_column_buttons()  # Dynamically create column buttons after loading TAB_DB
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load TAB_DB: {e}")
+
+def load_play_db():
+    global play_df
+    file_path = filedialog.askopenfilename(title="Select PLAY_DB File")
+    if file_path:
+        try:
+            play_df = pd.read_csv(file_path)
+            messagebox.showinfo("Success", "PLAY_DB loaded successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load PLAY_DB: {e}")
+
+def load_request_db():
+    global request_df
+    file_path = filedialog.askopenfilename(title="Select REQUEST_DB File")
+    if file_path:
+        try:
+            request_df = pd.read_csv(file_path)
+            messagebox.showinfo("Success", "REQUEST_DB loaded successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load REQUEST_DB: {e}")
+
+# Buttons for loading datasets
+tab_button = Button(button_frame, text="Load TAB_DB", command=load_tab_db, width=15)
+tab_button.pack(side="left", padx=5, pady=5)
+
+play_button = Button(button_frame, text="Load PLAY_DB", command=load_play_db, width=15)
+play_button.pack(side="left", padx=5, pady=5)
+
+request_button = Button(button_frame, text="Load REQUEST_DB", command=load_request_db, width=15)
+request_button.pack(side="left", padx=5, pady=5)
 
 # Add a button to apply filters
-filter_button = Button(root, text="Apply Filters", command=apply_filters, bg="green", fg="brown")
+filter_button = Button(root, text="Apply Filters", command=apply_filters , bg="green", fg="brown")
 filter_button.pack(pady=10)
 
 # Add a button for the No. of times played
 song_count_button = Button(root, text="No. of Times Played", command=song_count_ui, bg="blue", fg="brown")
 song_count_button.pack(pady=10)
 
-# In your GUI button creation section, add the clear button
+# Add a clear button
 clear_button = Button(root, text="Clear All Filters", command=clear_all_checkboxes, bg="red", fg="brown")
 clear_button.pack(pady=10)
 
