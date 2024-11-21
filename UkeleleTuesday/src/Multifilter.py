@@ -112,31 +112,23 @@ def get_user_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     return filtered_df
 
 
-def plot_filtered_data(df: pd.DataFrame, x_column: str, y_column: str) -> None:
+def get_output_columns(df: pd.DataFrame) -> list:
     """
-    Plots a graph for the filtered data.
+    Ask the user which columns they want to display after filtering.
     """
-    import matplotlib.pyplot as plt
+    print("Available columns for display: ", df.columns.tolist())
+    output_columns = input("Enter the columns to display, separated by commas: ").split(",")
+    # Clean up column names by stripping leading/trailing spaces
+    output_columns = [col.strip() for col in output_columns]
 
-    if x_column not in df.columns or y_column not in df.columns:
-        print(f"Error: Columns '{x_column}' or '{y_column}' not found in filtered data.")
-        return
+    # Validate that the selected columns are in the DataFrame
+    valid_columns = [col for col in output_columns if col in df.columns]
 
-    plt.figure(figsize=(10, 6))
+    if not valid_columns:
+        print("No valid columns selected. Displaying all columns.")
+        return df.columns.tolist()  # Return all columns if none are valid
 
-    if pd.api.types.is_numeric_dtype(df[x_column]) and pd.api.types.is_numeric_dtype(df[y_column]):
-        plt.plot(df[x_column], df[y_column], marker="o", linestyle="-", color="b")
-        plt.title(f"{y_column} vs {x_column}")
-        plt.xlabel(x_column)
-        plt.ylabel(y_column)
-    else:
-        df_grouped = df.groupby(x_column).size()
-        df_grouped.plot(kind="bar", color="c")
-        plt.title(f"{x_column} Distribution")
-        plt.xlabel(x_column)
-        plt.ylabel("Frequency")
-
-    plt.show()
+    return valid_columns
 
 
 # Main execution flow
@@ -167,16 +159,18 @@ if __name__ == "__main__":
         if filter_value:
             user_filters[column] = filter_value.split(",")  # Allow multiple filter values
 
-    # Specify output columns
-    output_columns = input("Columns to display, separated by commas: ").split(",")
-    output_columns = list(filter(lambda col: col.strip() in data.columns, map(str.strip, output_columns)))
-
     # Apply filters to the data
     filtered_data = get_user_filters(data, user_filters)
 
+    # Ask the user which columns to display after filtering
+    output_columns = get_output_columns(filtered_data)
+
+    # Select only the columns the user wants to display
+    filtered_data_display = filtered_data[output_columns]
+
     # Save results to a CSV file
-    if not filtered_data.empty:
-        filtered_data.to_csv("output.csv", index=False)
-        print("Filtered data saved to 'output.csv'.")
+    if not filtered_data_display.empty:
+        filtered_data_display.to_csv("output.csv", index=False)
+        print(f"Filtered data saved to 'output.csv'. Showing selected columns: {output_columns}")
     else:
         print("No data matched the provided filters.")
